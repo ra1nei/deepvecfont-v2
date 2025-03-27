@@ -53,7 +53,7 @@ def get_loader(root_path, img_size, lang, char_num, max_seq_len, dim_seq, batch_
     return dataloader
 
 if __name__ == '__main__':
-    root_path = 'data/new_data'
+    root_path = 'kaggle/working/data/new_data'
     max_seq_len = 51
     dim_seq = 10
     batch_size = 1
