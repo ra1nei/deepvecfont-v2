@@ -71,6 +71,7 @@ def convert_mp(opts):
 
                 except Exception as e:
                     print(f"Lỗi khi xử lý glyph {char} trong font {font_name}: {e}")
+                    error_fonts.append(font_name)  # Lưu lại tên font lỗi
                     continue  # Tiếp tục với glyph khác nếu có lỗi
 
             cur_font.close()
