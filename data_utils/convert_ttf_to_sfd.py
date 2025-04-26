@@ -78,8 +78,8 @@ def convert_mp(opts):
 def main():
     parser = argparse.ArgumentParser(description="Convert ttf fonts to sfd fonts")
     parser.add_argument("--language", type=str, default='eng', choices=['eng', 'chn', 'vie'])
-    parser.add_argument("--ttf_path", type=str, default='../data/font_ttfs')
-    parser.add_argument('--sfd_path', type=str, default='../data/font_sfds')
+    parser.add_argument("--ttf_path", type=str, default='/kaggle/input/font-vie/deepvecfont-v2-dataset-vie/data/font_ttfs')
+    parser.add_argument('--sfd_path', type=str, default='/kaggle/input/font-vie/deepvecfont-v2-dataset-vie/data/font_sfds')
     parser.add_argument('--split', type=str, default='train')
     opts = parser.parse_args()
     convert_mp(opts)
