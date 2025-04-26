@@ -20,6 +20,8 @@ def convert_mp(opts):
     process_num = mp.cpu_count() - 2
     font_num_per_process = font_num // process_num + 1
 
+    error_fonts = []
+
     def process(process_id, font_num_p_process):
         for i in range(process_id * font_num_p_process, (process_id + 1) * font_num_p_process):
             if i >= font_num:
@@ -34,7 +36,9 @@ def convert_mp(opts):
                 cur_font = fontforge.open(font_file_path)
             except Exception as e:
                 print(f"Không thể mở font {font_name}: {e}")
+                error_fonts.append(font_name)  # Lưu lại tên font lỗi
                 continue  # Tiếp tục với font khác nếu không thể mở
+
 
             target_dir = os.path.join(sfd_path, split, "{}".format(font_id))
             if not os.path.exists(target_dir):
@@ -78,6 +82,13 @@ def convert_mp(opts):
     for p in processes:
         p.join()
 
+    # Save error information to a text file
+    error_file_path = '/kaggle/working/error_fonts.txt'
+    with open(error_file_path, 'w') as f:
+        f.write(f"Total number of error fonts: {len(error_fonts)}\n")
+        for font in error_fonts:
+            f.write(f"{font}\n")
+    print(f"Error fonts saved to {error_file_path}")
 
 def main():
     parser = argparse.ArgumentParser(description="Convert ttf fonts to sfd fonts")
