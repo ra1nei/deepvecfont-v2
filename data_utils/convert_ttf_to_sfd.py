@@ -51,8 +51,7 @@ def convert_mp(opts):
                     if opts.language == 'chn':
                         char = 'uni' + char.encode("unicode_escape")[2:].decode("utf-8")
 
-                    cur_font.selection.select(('unicode', ord(char)))
-
+                    cur_font.selection.select(char)
                     cur_font.copy()
 
                     new_font_for_char = fontforge.font()
