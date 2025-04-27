@@ -13,8 +13,15 @@ def convert_mp(opts):
     fonts_file_path = os.path.join(opts.ttf_path, opts.language)  # opts.ttf_path, opts.language
     sfd_path = os.path.join(opts.sfd_path, opts.language)
 
+    # Initialize ttf_fnames as an empty list
+    ttf_fnames = []
+
     for root, dirs, files in os.walk(os.path.join(fonts_file_path, opts.split)):
-        ttf_fnames = files
+        ttf_fnames.extend(files)  # Collect all files into the list
+
+    if not ttf_fnames:
+        print(f"No font files found in {fonts_file_path}")
+        return  # Exit early if no fonts are found
 
     font_num = len(ttf_fnames)
     process_num = mp.cpu_count() - 2
@@ -36,9 +43,8 @@ def convert_mp(opts):
                 cur_font = fontforge.open(font_file_path)
             except Exception as e:
                 print(f"Không thể mở font {font_name}: {e}")
-                error_fonts.update(font_name)  # Lưu lại tên font lỗi
+                error_fonts.update([font_name])  # Lưu lại tên font lỗi
                 continue  # Tiếp tục với font khác nếu không thể mở
-
 
             target_dir = os.path.join(sfd_path, split, "{}".format(font_id))
             if not os.path.exists(target_dir):
@@ -71,7 +77,7 @@ def convert_mp(opts):
 
                 except Exception as e:
                     print(f"Lỗi khi xử lý glyph {char} trong font {font_name}: {e}")
-                    error_fonts.update(font_name)  # Lưu lại tên font lỗi
+                    error_fonts.update([font_name])  # Lưu lại tên font lỗi
                     continue  # Tiếp tục với glyph khác nếu có lỗi
 
             cur_font.close()
