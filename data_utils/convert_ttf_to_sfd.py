@@ -13,13 +13,8 @@ def convert_mp(opts):
     fonts_file_path = os.path.join(opts.ttf_path, opts.language)  # opts.ttf_path, opts.language
     sfd_path = os.path.join(opts.sfd_path, opts.language)
 
-    ttf_fnames = []
     for root, dirs, files in os.walk(os.path.join(fonts_file_path, opts.split)):
-        ttf_fnames.extend(files)  # Ensure we collect all files in the directory
-
-    if not ttf_fnames:
-        print(f"No fonts found in directory: {os.path.join(fonts_file_path, opts.split)}")
-        return  # Exit if no fonts were found
+        ttf_fnames = files
 
     font_num = len(ttf_fnames)
     process_num = mp.cpu_count() - 2
@@ -60,7 +55,7 @@ def convert_mp(opts):
                     cur_font.copy()
 
                     new_font_for_char = fontforge.font()
-                    new_font_for_char.selection.select(char)
+                    new_font_for_char.selection.select(char)  # Chỉnh sửa theo cách bạn muốn xử lý glyph này
                     new_font_for_char.paste()
                     new_font_for_char.fontname = "{}_".format(font_id) + font_name
 
