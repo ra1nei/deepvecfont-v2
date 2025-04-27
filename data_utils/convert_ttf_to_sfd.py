@@ -13,14 +13,19 @@ def convert_mp(opts):
     fonts_file_path = os.path.join(opts.ttf_path, opts.language)  # opts.ttf_path, opts.language
     sfd_path = os.path.join(opts.sfd_path, opts.language)
 
+    ttf_fnames = []
     for root, dirs, files in os.walk(os.path.join(fonts_file_path, opts.split)):
-        ttf_fnames = files
+        ttf_fnames.extend(files)  # Ensure we collect all files in the directory
+
+    if not ttf_fnames:
+        print(f"No fonts found in directory: {os.path.join(fonts_file_path, opts.split)}")
+        return  # Exit if no fonts were found
 
     font_num = len(ttf_fnames)
     process_num = mp.cpu_count() - 2
     font_num_per_process = font_num // process_num + 1
 
-    error_fonts = []
+    error_fonts = set()
 
     def process(process_id, font_num_p_process):
         for i in range(process_id * font_num_p_process, (process_id + 1) * font_num_p_process):
@@ -36,7 +41,7 @@ def convert_mp(opts):
                 cur_font = fontforge.open(font_file_path)
             except Exception as e:
                 print(f"Không thể mở font {font_name}: {e}")
-                error_fonts.append(font_name)  # Lưu lại tên font lỗi
+                error_fonts.update(font_name)  # Lưu lại tên font lỗi
                 continue  # Tiếp tục với font khác nếu không thể mở
 
 
@@ -55,7 +60,7 @@ def convert_mp(opts):
                     cur_font.copy()
 
                     new_font_for_char = fontforge.font()
-                    new_font_for_char.selection.select('A')  # Chỉnh sửa theo cách bạn muốn xử lý glyph này
+                    new_font_for_char.selection.select(char)
                     new_font_for_char.paste()
                     new_font_for_char.fontname = "{}_".format(font_id) + font_name
 
@@ -71,7 +76,7 @@ def convert_mp(opts):
 
                 except Exception as e:
                     print(f"Lỗi khi xử lý glyph {char} trong font {font_name}: {e}")
-                    error_fonts.append(font_name)  # Lưu lại tên font lỗi
+                    error_fonts.update(font_name)  # Lưu lại tên font lỗi
                     continue  # Tiếp tục với glyph khác nếu có lỗi
 
             cur_font.close()
