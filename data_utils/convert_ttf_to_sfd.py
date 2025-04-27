@@ -8,7 +8,7 @@ import argparse
 
 def convert_mp(opts):
     """Using multiprocessing to convert all fonts to sfd files"""
-    charset = open(f"/kaggle/input/font-vie/deepvecfont-v2-dataset-vie/char_set/{opts.language}.txt", 'r').read()
+    charset = open(f"/kaggle/input/font-eng-mini/deepvecfont-v2-minidataset-eng/char_set/{opts.language}.txt", 'r').read()
     charset_lenw = len(str(len(charset)))
     fonts_file_path = os.path.join(opts.ttf_path, opts.language)  # opts.ttf_path, opts.language
     sfd_path = os.path.join(opts.sfd_path, opts.language)
