@@ -8,7 +8,15 @@ import argparse
 
 def convert_mp(opts):
     """Using multiprocessing to convert all fonts to sfd files"""
-    charset = open(f"/kaggle/input/font-eng-mini/deepvecfont-v2-minidataset-eng/char_set/{opts.language}.txt", 'r').read()
+    # Kiểm tra và mở tệp charset tương ứng với ngôn ngữ
+    charset_file_path = os.path.join(opts.charset_path, f"{opts.language}.txt")
+    
+    # Kiểm tra xem tệp charset có tồn tại không
+    if not os.path.exists(charset_file_path):
+        print(f"Charset file for language '{opts.language}' not found at {charset_file_path}")
+        return
+    
+    charset = open(charset_file_path, 'r').read()
     charset_lenw = len(str(len(charset)))
     fonts_file_path = os.path.join(opts.ttf_path, opts.language)  # opts.ttf_path, opts.language
     sfd_path = os.path.join(opts.sfd_path, opts.language)
@@ -99,10 +107,11 @@ def convert_mp(opts):
 
 def main():
     parser = argparse.ArgumentParser(description="Convert ttf fonts to sfd fonts")
-    parser.add_argument("--language", type=str, default='eng', choices=['eng', 'chn'])
-    parser.add_argument("--ttf_path", type=str, default='../data/font_ttfs')
-    parser.add_argument('--sfd_path', type=str, default='../data/font_sfds')
-    parser.add_argument('--split', type=str, default='train')
+    parser.add_argument("--language", type=str, default='eng', choices=['eng', 'chn', 'vie'], help="Language for charset")
+    parser.add_argument("--charset_path", type=str, default='/kaggle/input/font-eng-mini/deepvecfont-v2-minidataset-eng/char_set', help="Path to charset files")
+    parser.add_argument("--ttf_path", type=str, default='../data/font_ttfs', help="Path to TTF font files")
+    parser.add_argument('--sfd_path', type=str, default='../data/font_sfds', help="Path to save SFD files")
+    parser.add_argument('--split', type=str, default='train', help="Data split (train/test)")
     opts = parser.parse_args()
     convert_mp(opts)
 
