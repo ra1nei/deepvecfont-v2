@@ -79,7 +79,7 @@ def convert_mp(opts):
                     # print(char_description)
 
                     cur_font.encoding = 'UnicodeFull'  # ✅ Bổ sung dòng này
-                    cur_font.selection.select(char)  # ✅ Unicode-safe selection
+                    cur_font.selection.select(("unicode", ord(char)))  # ✅ Unicode-safe selection
                     cur_font.copy()
 
                     new_font_for_char = fontforge.font()
