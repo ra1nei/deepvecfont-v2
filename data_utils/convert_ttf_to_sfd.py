@@ -63,7 +63,7 @@ def convert_mp(opts):
                     char_description = open(os.path.join(target_dir, '{}_{num:0{width}}.txt'.format(font_id, num=char_id, width=charset_lenw)), 'w')
 
                     cur_font.encoding = 'UnicodeFull'  # ✅ Bổ sung dòng này
-                    cur_font.selection.select(("unicode", ord(char)))  # ✅ Unicode-safe selection
+                    cur_font.selection.select(ord(char))  # ✅ Unicode-safe selection
                     cur_font.copy()
 
                     new_font_for_char = fontforge.font()
