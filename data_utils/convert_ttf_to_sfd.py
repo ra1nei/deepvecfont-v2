@@ -76,7 +76,7 @@ def convert_mp(opts):
                 try:
                     print("Char: ", char, '\n', "Unicode: ", ord(char))
                     char_description = open(os.path.join(target_dir, '{}_{num:0{width}}.txt'.format(font_id, num=char_id, width=charset_lenw)), 'w')
-                    print(char_description)
+                    # print(char_description)
 
                     cur_font.encoding = 'UnicodeFull'  # ✅ Bổ sung dòng này
                     cur_font.selection.select(char)  # ✅ Unicode-safe selection
