@@ -69,6 +69,7 @@ def convert_mp(opts):
                     cur_font.copy()
 
                     new_font_for_char = fontforge.font()
+                    new_font_for_char.encoding = 'UnicodeBMP'
                     new_font_for_char.selection.select(char)  # Chỉnh sửa theo cách bạn muốn xử lý glyph này
                     new_font_for_char.paste()
                     new_font_for_char.fontname = "{}_".format(font_id) + font_name
