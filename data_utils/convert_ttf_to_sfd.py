@@ -74,24 +74,24 @@ def convert_mp(opts):
 
             for char_id, char in enumerate(charset):
                 try:
-                    print(char, ord(char))
+                    print("Char: ", char, '\n', "Unicode: ", ord(char))
                     char_description = open(os.path.join(target_dir, '{}_{num:0{width}}.txt'.format(font_id, num=char_id, width=charset_lenw)), 'w')
                     print(char_description)
 
                     cur_font.encoding = 'UnicodeFull'  # ✅ Bổ sung dòng này
-                    cur_font.selection.select(ord(char))  # ✅ Unicode-safe selection
+                    cur_font.selection.select(char)  # ✅ Unicode-safe selection
                     cur_font.copy()
 
                     new_font_for_char = fontforge.font()
                     new_font_for_char.encoding = 'UnicodeFull'
-                    new_font_for_char.selection.select(("unicode", ord(char)))  # ✅ Unicode-safe selection
+                    new_font_for_char.selection.select(("unicode", char))  # ✅ Unicode-safe selection
                     new_font_for_char.paste()
 
                     new_font_for_char.fontname = "{}_{}".format(font_id, font_name)
 
                     new_font_for_char.save(os.path.join(target_dir, '{}_{num:0{width}}.sfd'.format(font_id, num=char_id, width=charset_lenw)))
 
-                    char_description.write(str(ord(char)) + '\n')
+                    char_description.write(str(char) + '\n')
                     char_description.write(str(new_font_for_char[char].width) + '\n')
                     char_description.write(str(new_font_for_char[char].vwidth) + '\n')
                     char_description.write('{num:0{width}}'.format(num=char_id, width=charset_lenw) + '\n')
