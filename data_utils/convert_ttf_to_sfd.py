@@ -74,6 +74,7 @@ def convert_mp(opts):
 
             for char_id, char in enumerate(charset):
                 try:
+                    print('=========================================================')
                     print('\n\n', "Char: ", char, '\n', "Unicode: ", ord(char), '\n', cur_font)
                     char_description = open(os.path.join(target_dir, '{}_{num:0{width}}.txt'.format(font_id, num=char_id, width=charset_lenw)), 'w')
                     # print(char_description)
@@ -98,11 +99,14 @@ def convert_mp(opts):
                     char_description.write('{}'.format(font_id))
                     char_description.close()
 
+                    print('=========================================================')
                 except Exception as e:
+                    print('=========================================================')
                     print(f"Lỗi khi xử lý glyph {char} trong font {font_name}: {e}")
                     error_fonts.update([font_name])  # Lưu lại tên font lỗi
+                    print('=========================================================')
                     continue  # Tiếp tục với glyph khác nếu có lỗi
-
+                    
             cur_font.close()
 
     processes = [mp.Process(target=process, args=(pid, font_num_per_process)) for pid in range(process_num)]
