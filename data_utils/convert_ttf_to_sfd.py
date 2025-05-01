@@ -74,7 +74,7 @@ def convert_mp(opts):
 
             for char_id, char in enumerate(charset):
                 try:
-                    print("Char: ", char, '\n', "Unicode: ", ord(char))
+                    print('\n\n', "Char: ", char, '\n', "Unicode: ", ord(char), '\n', cur_font)
                     char_description = open(os.path.join(target_dir, '{}_{num:0{width}}.txt'.format(font_id, num=char_id, width=charset_lenw)), 'w')
                     # print(char_description)
 
