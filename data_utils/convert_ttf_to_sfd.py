@@ -6,6 +6,8 @@ import argparse
 # conda deactivate
 # apt install python3-fontforge
 
+print(fontforge)
+
 def convert_mp(opts):
     """Using multiprocessing to convert all fonts to sfd files"""
     # Kiểm tra và mở tệp charset tương ứng với ngôn ngữ
