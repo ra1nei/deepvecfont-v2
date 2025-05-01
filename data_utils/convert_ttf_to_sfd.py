@@ -12,25 +12,14 @@ def convert_mp(opts):
     """Using multiprocessing to convert all fonts to sfd files"""
     # Kiểm tra và mở tệp charset tương ứng với ngôn ngữ
     charset_file_path = os.path.join(opts.charset_path, f"{opts.language}.txt")
-
+    
     # Kiểm tra xem tệp charset có tồn tại không
     if not os.path.exists(charset_file_path):
         print(f"Charset file for language '{opts.language}' not found at {charset_file_path}")
         return
-
-    # Đọc file charset, hỗ trợ nhiều dòng
-    with open(charset_file_path, 'r', encoding='utf-8') as f:
-        lines = f.readlines()
-
-    # Gộp toàn bộ các dòng lại và loại bỏ ký tự trắng
-    charset = ''.join([line.strip() for line in lines if line.strip()])
-
-    # In ra charset đầy đủ đã đọc
-    print("✅ Charset loaded from file:")
-    print(charset)
-
+    
+    charset = open(charset_file_path, 'r').read()
     charset_lenw = len(str(len(charset)))
-
     fonts_file_path = os.path.join(opts.ttf_path, opts.language)  # opts.ttf_path, opts.language
     sfd_path = os.path.join(opts.sfd_path, opts.language)
 
@@ -75,7 +64,6 @@ def convert_mp(opts):
             for char_id, char in enumerate(charset):
                 try:
                     char_description = open(os.path.join(target_dir, '{}_{num:0{width}}.txt'.format(font_id, num=char_id, width=charset_lenw)), 'w')
-                    print(char_description)
 
                     cur_font.encoding = 'UnicodeFull'  # ✅ Bổ sung dòng này
                     cur_font.selection.select(ord(char))  # ✅ Unicode-safe selection
