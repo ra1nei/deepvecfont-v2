@@ -62,14 +62,16 @@ def convert_mp(opts):
                 try:
                     char_description = open(os.path.join(target_dir, '{}_{num:0{width}}.txt'.format(font_id, num=char_id, width=charset_lenw)), 'w')
 
-                    cur_font.selection.select(ord(char))
+                    cur_font.encoding = 'UnicodeFull'  # ✅ Bổ sung dòng này
+                    cur_font.selection.select(("unicode", ord(char)))  # ✅ Unicode-safe selection
                     cur_font.copy()
 
                     new_font_for_char = fontforge.font()
                     new_font_for_char.encoding = 'UnicodeFull'
-                    new_font_for_char.selection.select(char)  # Chỉnh sửa theo cách bạn muốn xử lý glyph này
+                    new_font_for_char.selection.select(("unicode", ord(char)))  # ✅ Unicode-safe selection
                     new_font_for_char.paste()
-                    new_font_for_char.fontname = "{}_".format(font_id) + font_name
+
+                    new_font_for_char.fontname = "{}_{}".format(font_id, font_name)
 
                     new_font_for_char.save(os.path.join(target_dir, '{}_{num:0{width}}.sfd'.format(font_id, num=char_id, width=charset_lenw)))
 
@@ -78,7 +80,6 @@ def convert_mp(opts):
                     char_description.write(str(new_font_for_char[char].vwidth) + '\n')
                     char_description.write('{num:0{width}}'.format(num=char_id, width=charset_lenw) + '\n')
                     char_description.write('{}'.format(font_id))
-
                     char_description.close()
 
                 except Exception as e:
