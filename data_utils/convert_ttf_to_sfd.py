@@ -3,54 +3,51 @@ import os
 import multiprocessing as mp
 import argparse
 
-# conda deactivate
-# apt install python3-fontforge
+# Global lock for safe printing across processes
+print_lock = mp.Lock()
 
-print(fontforge)
+def safe_print(*args, **kwargs):
+    with print_lock:
+        print(*args, **kwargs)
+
+safe_print(fontforge)
 
 def convert_mp(opts):
     """Using multiprocessing to convert all fonts to sfd files"""
-    # Kiểm tra và mở tệp charset tương ứng với ngôn ngữ
     charset_file_path = os.path.join(opts.charset_path, f"{opts.language}.txt")
 
-    # Kiểm tra xem tệp charset có tồn tại không
     if not os.path.exists(charset_file_path):
-        print(f"Charset file for language '{opts.language}' not found at {charset_file_path}")
+        safe_print(f"Charset file for language '{opts.language}' not found at {charset_file_path}")
         return
 
-    # Đọc file charset, hỗ trợ nhiều dòng
     with open(charset_file_path, 'r', encoding='utf-8') as f:
         lines = f.readlines()
 
-    # Gộp toàn bộ các dòng lại và loại bỏ ký tự trắng
     charset = ''.join([line.strip() for line in lines if line.strip()])
 
-    # In ra charset đầy đủ đã đọc
-    print("✅ Charset loaded from file:")
-    print(charset)
+    safe_print("✅ Charset loaded from file:")
+    safe_print(charset)
 
     charset_lenw = len(str(len(charset)))
 
-    fonts_file_path = os.path.join(opts.ttf_path, opts.language)  # opts.ttf_path, opts.language
+    fonts_file_path = os.path.join(opts.ttf_path, opts.language)
     sfd_path = os.path.join(opts.sfd_path, opts.language)
 
-    # Initialize ttf_fnames as an empty list
     ttf_fnames = []
-
     for root, dirs, files in os.walk(os.path.join(fonts_file_path, opts.split)):
-        ttf_fnames.extend(files)  # Collect all files into the list
+        ttf_fnames.extend(files)
 
     if not ttf_fnames:
-        print(f"No font files found in {fonts_file_path}")
-        return  # Exit early if no fonts are found
+        safe_print(f"No font files found in {fonts_file_path}")
+        return
 
     font_num = len(ttf_fnames)
     process_num = mp.cpu_count() - 2
     font_num_per_process = font_num // process_num + 1
 
-    error_fonts = set()
+    error_fonts = mp.Manager().set()
 
-    def process(process_id, font_num_p_process):
+    def process(process_id, font_num_p_process, error_fonts):
         for i in range(process_id * font_num_p_process, (process_id + 1) * font_num_p_process):
             if i >= font_num:
                 break
@@ -64,66 +61,61 @@ def convert_mp(opts):
                 cur_font = fontforge.open(font_file_path)
                 cur_font.encoding = "UnicodeFull"
             except Exception as e:
-                print(f"Không thể mở font {font_name}: {e}")
-                error_fonts.update([font_name])  # Lưu lại tên font lỗi
-                continue  # Tiếp tục với font khác nếu không thể mở
+                safe_print(f"[PID {process_id}] ❌ Không thể mở font {font_name}: {e}")
+                error_fonts.add(font_name)
+                continue
 
-            target_dir = os.path.join(sfd_path, split, "{}".format(font_id))
-            if not os.path.exists(target_dir):
-                os.makedirs(target_dir)
+            target_dir = os.path.join(sfd_path, split, f"{font_id}")
+            os.makedirs(target_dir, exist_ok=True)
 
             for char_id, char in enumerate(charset):
-                print('=======================================================')
-                print("Char: ", char, '\n', "Unicode: ", ord(char), '\n', cur_font)
+                safe_print('=======================================================')
+                safe_print(f"[PID {process_id}] Char: {char} | Unicode: {ord(char)} | Font: {font_name}")
+
                 try:
-                    char_description = open(os.path.join(target_dir, '{}_{num:0{width}}.txt'.format(font_id, num=char_id, width=charset_lenw)), 'w')
+                    char_file = os.path.join(target_dir, f'{font_id}_{char_id:0{charset_lenw}}.txt')
+                    with open(char_file, 'w') as char_description:
+                        cur_font.encoding = 'UnicodeFull'
+                        cur_font.selection.select((ord(char)))
 
-                    cur_font.encoding = 'UnicodeFull'  # ✅ Bổ sung dòng này
-                    cur_font.selection.select((ord(char)))  # ✅ Unicode-safe selection
-                    print("Curfont.select w unicode: ", cur_font.selection.select(("unicode", ord(char))), '\n')
-                    print("Curfont.select w/o unicode: ", cur_font.selection.select((ord(char))), '\n')
-                    cur_font.copy()
+                        cur_font.copy()
 
-                    new_font_for_char = fontforge.font()
-                    new_font_for_char.encoding = 'UnicodeFull'
-                    new_font_for_char.selection.select((ord(char)))  # ✅ Unicode-safe selection
-                    print("newfont.select w unicode: ", new_font_for_char.selection.select(("unicode", ord(char))), '\n')
-                    print("newfont.select w/o unicode: ", new_font_for_char.selection.select((ord(char))), '\n')
-                    new_font_for_char.paste()
+                        new_font_for_char = fontforge.font()
+                        new_font_for_char.encoding = 'UnicodeFull'
+                        new_font_for_char.selection.select((ord(char)))
+                        new_font_for_char.paste()
 
-                    new_font_for_char.fontname = "{}_{}".format(font_id, font_name)
+                        new_font_for_char.fontname = f"{font_id}_{font_name}"
+                        sfd_file = os.path.join(target_dir, f'{font_id}_{char_id:0{charset_lenw}}.sfd')
+                        new_font_for_char.save(sfd_file)
 
-                    new_font_for_char.save(os.path.join(target_dir, '{}_{num:0{width}}.sfd'.format(font_id, num=char_id, width=charset_lenw)))
-
-                    char_description.write(str(char) + '\n')
-                    char_description.write(str(new_font_for_char[char].width) + '\n')
-                    char_description.write(str(new_font_for_char[char].vwidth) + '\n')
-                    char_description.write('{num:0{width}}'.format(num=char_id, width=charset_lenw) + '\n')
-                    char_description.write('{}'.format(font_id))
-                    char_description.close()
+                        char_description.write(f"{char}\n")
+                        char_description.write(f"{new_font_for_char[char].width}\n")
+                        char_description.write(f"{new_font_for_char[char].vwidth}\n")
+                        char_description.write(f"{char_id:0{charset_lenw}}\n")
+                        char_description.write(f"{font_id}")
 
                 except Exception as e:
-                    print(f"Lỗi khi xử lý glyph {char} trong font {font_name}: {e}")
-                    error_fonts.update([font_name])  # Lưu lại tên font lỗi
-                    print('=======================================================\n\n\n')
-                    continue  # Tiếp tục với glyph khác nếu có lỗi
-                print('=======================================================\n\n\n')
+                    safe_print(f"[PID {process_id}] ⚠️ Lỗi khi xử lý glyph '{char}' trong font '{font_name}': {e}")
+                    error_fonts.add(font_name)
+                    continue
+                safe_print('=======================================================\n')
+
             cur_font.close()
 
-    processes = [mp.Process(target=process, args=(pid, font_num_per_process)) for pid in range(process_num)]
+    processes = [mp.Process(target=process, args=(pid, font_num_per_process, error_fonts)) for pid in range(process_num)]
 
     for p in processes:
         p.start()
     for p in processes:
         p.join()
 
-    # Save error information to a text file
     error_file_path = '/kaggle/working/error_fonts.txt'
     with open(error_file_path, 'w') as f:
         f.write(f"Total number of error fonts: {len(error_fonts)}\n")
         for font in error_fonts:
             f.write(f"{font}\n")
-    print(f"Error fonts saved to {error_file_path}")
+    safe_print(f"✅ Error fonts saved to {error_file_path}")
 
 def main():
     parser = argparse.ArgumentParser(description="Convert ttf fonts to sfd fonts")
