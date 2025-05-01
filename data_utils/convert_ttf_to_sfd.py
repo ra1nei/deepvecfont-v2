@@ -45,7 +45,8 @@ def convert_mp(opts):
     process_num = mp.cpu_count() - 2
     font_num_per_process = font_num // process_num + 1
 
-    error_fonts = mp.Manager().set()
+    manager = mp.Manager()
+    error_fonts = manager.list()
 
     def process(process_id, font_num_p_process, error_fonts):
         for i in range(process_id * font_num_p_process, (process_id + 1) * font_num_p_process):
@@ -112,10 +113,12 @@ def convert_mp(opts):
 
     error_file_path = '/kaggle/working/error_fonts.txt'
     with open(error_file_path, 'w') as f:
-        f.write(f"Total number of error fonts: {len(error_fonts)}\n")
-        for font in error_fonts:
+        unique_error_fonts = set(error_fonts)
+        f.write(f"Total number of error fonts: {len(unique_error_fonts)}\n")
+        for font in unique_error_fonts:
             f.write(f"{font}\n")
     safe_print(f"✅ Error fonts saved to {error_file_path}")
+
 
 def main():
     parser = argparse.ArgumentParser(description="Convert ttf fonts to sfd fonts")
