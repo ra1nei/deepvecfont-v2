@@ -85,7 +85,7 @@ def convert_mp(opts):
 
                     new_font_for_char = fontforge.font()
                     new_font_for_char.encoding = 'UnicodeFull'
-                    new_font_for_char.selection.select(("unicode", char))  # ✅ Unicode-safe selection
+                    new_font_for_char.selection.select(("unicode", ord(char)))  # ✅ Unicode-safe selection
                     new_font_for_char.paste()
 
                     new_font_for_char.fontname = "{}_{}".format(font_id, font_name)
