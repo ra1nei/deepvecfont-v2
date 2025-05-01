@@ -107,7 +107,7 @@ def convert_mp(opts):
                     error_fonts.update([font_name])  # Lưu lại tên font lỗi
                     print('=======================================================\n\n\n')
                     continue  # Tiếp tục với glyph khác nếu có lỗi
-
+                print('=======================================================\n\n\n')
             cur_font.close()
 
     processes = [mp.Process(target=process, args=(pid, font_num_per_process)) for pid in range(process_num)]
