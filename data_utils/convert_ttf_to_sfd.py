@@ -73,11 +73,9 @@ def convert_mp(opts):
                 os.makedirs(target_dir)
 
             for char_id, char in enumerate(charset):
+                print('\n', "Char: ", char, '\n', "Unicode: ", ord(char), '\n', cur_font)
                 try:
-                    print('=========================================================')
-                    print('\n', "Char: ", char, '\n', "Unicode: ", ord(char), '\n', cur_font)
                     char_description = open(os.path.join(target_dir, '{}_{num:0{width}}.txt'.format(font_id, num=char_id, width=charset_lenw)), 'w')
-                    # print(char_description)
 
                     cur_font.encoding = 'UnicodeFull'  # ✅ Bổ sung dòng này
                     cur_font.selection.select((ord(char)))  # ✅ Unicode-safe selection
@@ -103,12 +101,9 @@ def convert_mp(opts):
                     char_description.write('{}'.format(font_id))
                     char_description.close()
 
-                    print('\n=========================================================')
                 except Exception as e:
-                    print('=========================================================\n')
                     print(f"Lỗi khi xử lý glyph {char} trong font {font_name}: {e}")
                     error_fonts.update([font_name])  # Lưu lại tên font lỗi
-                    print('\n=========================================================')
                     continue  # Tiếp tục với glyph khác nếu có lỗi
                     
             cur_font.close()
