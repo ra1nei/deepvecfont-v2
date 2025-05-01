@@ -98,7 +98,7 @@ def convert_mp(opts):
 
                 except Exception as e:
                     safe_print(f"[PID {process_id}] ⚠️ Lỗi khi xử lý glyph '{char}' trong font '{font_name}': {e}")
-                    error_fonts.add(font_name)
+                    error_fonts.append(font_name)
                     continue
                 safe_print('=======================================================\n')
 
@@ -113,10 +113,11 @@ def convert_mp(opts):
 
     error_file_path = '/kaggle/working/error_fonts.txt'
     with open(error_file_path, 'w') as f:
-        unique_error_fonts = set(error_fonts)
-        f.write(f"Total number of error fonts: {len(unique_error_fonts)}\n")
-        for font in unique_error_fonts:
+        unique_fonts = set(error_fonts)  # loại bỏ trùng lặp
+        f.write(f"Total number of error fonts: {len(unique_fonts)}\n")
+        for font in unique_fonts:
             f.write(f"{font}\n")
+
     safe_print(f"✅ Error fonts saved to {error_file_path}")
 
 
