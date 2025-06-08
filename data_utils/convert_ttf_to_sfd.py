@@ -3,6 +3,7 @@ import os
 import multiprocessing as mp
 import argparse
 from tqdm import tqdm # Để hiển thị thanh tiến trình đẹp mắt
+import sys
 
 # Sử dụng Lock để in an toàn từ nhiều tiến trình
 print_lock = mp.Lock()
@@ -30,22 +31,39 @@ def process_single_font(task_args):
     """
     font_file_path, charset, charset_lenw, sfd_base_path, language, split = task_args
     font_name = os.path.basename(font_file_path)
-    font_id = font_name.split('.')[0] # Lấy tên font không có đuôi mở rộng
+    font_id = font_name.split('.')[0]
     
-    # Kiểm tra xem file font có tồn tại không trước khi mở
     if not os.path.exists(font_file_path):
         safe_print(f"❌ File font không tồn tại: {font_file_path}")
         return font_name
 
-    cur_font = None # Khởi tạo cur_font để đảm bảo nó được đóng
+    cur_font = None 
+    # Mở os.devnull để chuyển hướng stderr
+    # 'w' là chế độ ghi, 'encoding' không cần thiết cho devnull nhưng có thể thêm nếu muốn
+    # open(os.devnull, 'w') trả về một file object.
+    devnull_fd = None # Khởi tạo biến để đóng sau này
+    
     try:
+        # Chuyển hướng stderr sang os.devnull
+        original_stderr = sys.stderr
+        devnull_fd = open(os.devnull, 'w')
+        sys.stderr = devnull_fd
+
         cur_font = fontforge.open(font_file_path)
         cur_font.encoding = "UnicodeFull"
     except Exception as e:
+        sys.stderr = original_stderr # Khôi phục stderr trước khi in lỗi
+        if devnull_fd: # Đảm bảo đóng devnull_fd
+            devnull_fd.close()
         safe_print(f"❌ Không thể mở font {font_name} từ '{font_file_path}': {e}")
         if cur_font:
             cur_font.close()
         return font_name
+    finally:
+        # Quan trọng: Đảm bảo khôi phục stderr và đóng devnull_fd trong mọi trường hợp
+        sys.stderr = original_stderr 
+        if devnull_fd:
+            devnull_fd.close()
 
     target_dir = os.path.join(sfd_base_path, language, split, f"{font_id}")
     os.makedirs(target_dir, exist_ok=True)
@@ -53,56 +71,58 @@ def process_single_font(task_args):
     error_during_char_processing = False
 
     for char_id, char in enumerate(charset):
+        devnull_fd_inner = None # Khởi tạo biến cho vòng lặp trong
         try:
-            # Tạo một fontforge.font mới cho mỗi ký tự để tránh xung đột bộ nhớ
-            # hoặc các vấn đề với font gốc khi copy/paste
+            # Chuyển hướng stderr một lần nữa cho mỗi thao tác FontForge bên trong vòng lặp
+            original_stderr_inner = sys.stderr
+            devnull_fd_inner = open(os.devnull, 'w')
+            sys.stderr = devnull_fd_inner
+
             new_font_for_char = fontforge.font()
             new_font_for_char.encoding = 'UnicodeFull'
 
-            # Chọn glyph trong font gốc và copy
             cur_font.selection.select((ord(char)))
             cur_font.copy()
 
-            # Chọn vị trí trong font mới và paste
             new_font_for_char.selection.select((ord(char)))
             new_font_for_char.paste()
 
-            # Thiết lập tên font và lưu SFD
-            new_font_for_char.fontname = f"{font_id}_{font_name.replace('.', '_')}_{char_id}" # Tên duy nhất cho font của char
+            new_font_for_char.fontname = f"{font_id}_{font_name.replace('.', '_')}_{char_id}"
             sfd_file = os.path.join(target_dir, f'{font_id}_{char_id:0{charset_lenw}}.sfd')
             new_font_for_char.save(sfd_file)
 
-            # Lưu thông tin ký tự vào tệp .txt
             char_file = os.path.join(target_dir, f'{font_id}_{char_id:0{charset_lenw}}.txt')
             with open(char_file, 'w', encoding='utf-8') as char_description:
                 char_description.write(f"{char}\n")
-                # Kiểm tra xem glyph có tồn tại trước khi lấy thuộc tính
                 if char in new_font_for_char:
                     char_description.write(f"{new_font_for_char[char].width}\n")
                     char_description.write(f"{new_font_for_char[char].vwidth}\n")
-                else: # Glyph không tồn tại, ghi giá trị mặc định
-                    char_description.write("0\n0\n") # Hoặc giá trị thích hợp khác
+                else:
+                    char_description.write("0\n0\n")
 
                 char_description.write(f"{char_id:0{charset_lenw}}\n")
                 char_description.write(f"{font_id}")
 
-            new_font_for_char.close() # Đóng font cho ký tự sau khi xử lý
+            new_font_for_char.close()
 
         except Exception as e:
+            # Chỉ in lỗi nếu đây là lỗi thực sự từ code của bạn, không phải cảnh báo FontForge
             safe_print(f"⚠️ Lỗi khi xử lý glyph '{char}' (Unicode: {ord(char)}) trong font '{font_name}': {e}")
             error_during_char_processing = True
             if new_font_for_char:
                 new_font_for_char.close()
-            # Quan trọng: Nếu một glyph bị lỗi, thường thì các glyph khác cũng có thể bị lỗi.
-            # Quyết định tiếp tục hay dừng lại ở đây tùy thuộc vào yêu cầu.
-            # Trong ví dụ này, mình sẽ tiếp tục để thu thập tất cả các lỗi có thể.
-            # Nếu bạn muốn dừng ngay font hiện tại khi có lỗi char, dùng 'break' ở đây.
+        finally:
+            sys.stderr = original_stderr_inner # Khôi phục stderr
+            if devnull_fd_inner: # Đảm bảo đóng devnull_fd_inner
+                devnull_fd_inner.close()
 
-    cur_font.close() # Đóng font gốc sau khi xử lý tất cả các ký tự
+
+    cur_font.close() 
     
     if error_during_char_processing:
-        return font_name # Trả về tên font nếu có bất kỳ lỗi nào xảy ra trong quá trình xử lý glyph
-    return None # Trả về None nếu font được xử lý hoàn tất mà không có lỗi nghiêm trọng
+        return font_name
+    return None
+
 
 def convert_fonts_to_sfd(opts):
     """
