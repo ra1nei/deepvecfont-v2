@@ -2,6 +2,10 @@ import fontforge  # noqa
 import os
 import multiprocessing as mp
 import argparse
+import warnings
+
+# Ignore all warnings
+warnings.filterwarnings('ignore')
 
 # Global lock for safe printing across processes
 print_lock = mp.Lock()
