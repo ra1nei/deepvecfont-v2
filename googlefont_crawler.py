@@ -6,7 +6,7 @@ import json
 # --- Cấu hình của bạn ---
 # Đảm bảo bạn đã thay thế "YOUR_GOOGLE_FONTS_API_KEY" bằng API Key thực tế của bạn
 # (Lưu ý: API Key bạn cung cấp trong prompt có thể không hợp lệ, hãy kiểm tra lại)
-API_KEY = "AIzaSyDXGapXOpHcZ9k4_1QQTeeYjYhdjRkMe2Y" # Thay thế bằng API Key hợp lệ của bạn
+API_KEY = "" # Thay thế bằng API Key hợp lệ của bạn
 DOWNLOAD_DIR = "downloaded_fonts"
 CSS_DIR = "css"
 
