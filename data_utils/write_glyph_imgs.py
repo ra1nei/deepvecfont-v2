@@ -18,7 +18,7 @@ def get_bbox(img):
 
 def write_glyph_imgs_mp(opts):
     """Useing multiprocessing to render glyph images"""
-    charset = open(f"../data/char_set/{opts.language}.txt", 'r').read()
+    charset = open(f"../data/char_set/{opts.language}.txt", 'r', encoding='utf-8').read()
     fonts_file_path = os.path.join(opts.ttf_path, opts.language)
     sfd_path = os.path.join(opts.sfd_path, opts.language)
     for root, dirs, files in os.walk(os.path.join(fonts_file_path, opts.split)):
