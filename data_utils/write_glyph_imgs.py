@@ -16,123 +16,161 @@ def get_bbox(img):
     height = range_y[0][-1] - range_y[0][0]
     return width, height
 
+# --- GLOBAL WORKER FUNCTION FOR MULTIPROCESSING ---
+# This function MUST be defined at the top-level of the module
+# so that it can be pickled by multiprocessing.
+def _process_single_font(process_id, font_num_p_process, opts, charset, ttf_names, sfd_path, fonts_file_path, charset_lenw, font_num):
+    """
+    This function is executed by each multiprocessing worker to render glyph images for a subset of fonts.
+    """
+    for i in range(process_id * font_num_p_process, (process_id + 1) * font_num_p_process):
+        if i >= font_num:
+            break
+
+        fontname = ttf_names[i].split('.')[0]
+        print(f"Processing font: {fontname}")
+
+        output_font_dir = os.path.join(sfd_path, opts.split, fontname)
+        # Check if the SFD directory for the font exists. If not, we skip this font.
+        if not os.path.exists(output_font_dir):
+            print(f"Skipping font {fontname}: SFD directory not found at {output_font_dir}")
+            continue
+
+        ttf_file_path = os.path.join(fonts_file_path, opts.split, ttf_names[i])
+
+        try:
+            font = ImageFont.truetype(ttf_file_path, opts.img_size, encoding="unic")
+        except Exception as e:
+            print(f'Error opening font {fontname} from {ttf_file_path}: {e}')
+            continue
+                                
+        fontimgs_array = np.zeros((len(charset), opts.img_size, opts.img_size), np.uint8)
+        fontimgs_array[:, :, :] = 255
+
+        flag_success = True
+        
+        for charid in range(len(charset)):
+            txt_fpath = os.path.join(sfd_path, opts.split, fontname, fontname + '_' + '{num:0{width}}'.format(num=charid, width=charset_lenw) + '.txt')
+            try:
+                # IMPORTANT: Specify encoding='utf-8' for reading character data
+                txt_lines = open(txt_fpath,'r', encoding='utf-8').read().split('\n')
+            except Exception as e:
+                print(f'Cannot read text file {txt_fpath} for font {fontname} charid {charid}: {e}')
+                flag_success = False
+                break
+            if len(txt_lines) < 5: 
+                print(f'Warning: Meta file for font {fontname} charid {charid} is too short. Skipping character.')
+                flag_success = False
+                break 
+
+            vbox_w = float(txt_lines[1])
+            vbox_h = float(txt_lines[2])
+            norm = max(int(vbox_w), int(vbox_h))
+
+            # Handle ZeroDivisionError: Ensure norm is not zero
+            if norm == 0:
+                print(f'Warning: norm is zero for font {fontname}, charid {charid} (character: "{char}"). Skipping character.')
+                flag_success = False
+                break 
+
+            if int(vbox_h) > int(vbox_w):
+                add_to_y = 0
+                add_to_x = abs(int(vbox_h) - int(vbox_w)) / 2
+                add_to_x = add_to_x * (float(opts.img_size) / norm)
+            else:
+                add_to_y = abs(int(vbox_h) - int(vbox_w)) / 2
+                add_to_y = add_to_y * (float(opts.img_size) / norm)
+                add_to_x = 0
+
+            char = charset[charid]
+            array = np.ndarray((opts.img_size, opts.img_size), np.uint8)
+            array[:, :] = 255
+            image = Image.fromarray(array)
+            draw = ImageDraw.Draw(image)
+            
+            try:
+                # Use getbbox() instead of getsize() for Pillow 10+ compatibility
+                left, top, right, bottom = font.getbbox(char)
+                font_width = right - left
+                font_height = bottom - top
+            except Exception as e:
+                print(f'Cannot calculate height and width for {ttf_names[i]} char {charid} using getbbox: {e}')
+                flag_success = False
+                break
+            
+            try:
+                ascent, descent = font.getmetrics()
+            except Exception as e:
+                print(f'Cannot get ascent, descent for {ttf_names[i]} char {charid}: {e}')
+                flag_success = False
+                break
+            
+            draw_pos_x = add_to_x
+            draw_pos_y = add_to_y + opts.img_size - ascent - int((opts.img_size / 24.0) * (4.0 / 3.0))
+            
+            draw.text((draw_pos_x, draw_pos_y), char, (0), font=font)
+            
+            if opts.debug:
+                os.makedirs(output_font_dir, exist_ok=True) # Ensure directory exists
+                image.save(os.path.join(output_font_dir, str(charid) + '_' + str(opts.img_size) + '.png'))
+
+            try:
+                char_w, char_h = get_bbox(image)
+            except Exception as e:
+                print(f'Error getting bounding box for {ttf_names[i]} char {charid}: {e}')
+                flag_success = False
+                break
+            
+            if (char_w < opts.img_size * 0.15) and (char_h < opts.img_size * 0.15):
+                print(f'Warning: Character {charid} of font {fontname} has very small dimensions ({char_w}x{char_h}). Skipping.')
+                flag_success = False
+                break
+            
+            fontimgs_array[charid] = np.array(image)
+
+        if flag_success:
+            # Only save if all characters for this font were processed successfully
+            os.makedirs(output_font_dir, exist_ok=True) # Ensure directory exists
+            np.save(os.path.join(output_font_dir, 'imgs_' + str(opts.img_size) + '.npy'), fontimgs_array)
+        else:
+            print(f"Failed to process all characters for font: {fontname}. Skipping saving .npy file.")
+
+
+# --- MAIN MULTIPROCESSING LOGIC ---
 def write_glyph_imgs_mp(opts):
     """Useing multiprocessing to render glyph images"""
+    # IMPORTANT: Specify encoding='utf-8' for reading charset
     charset = open(f"../data/char_set/{opts.language}.txt", 'r', encoding='utf-8').read()
     fonts_file_path = os.path.join(opts.ttf_path, opts.language)
     sfd_path = os.path.join(opts.sfd_path, opts.language)
+    
+    ttf_names = []
     for root, dirs, files in os.walk(os.path.join(fonts_file_path, opts.split)):
-        ttf_names = files
-    # ttf_names = ['08343.aspx_id=299524532']
+        ttf_names.extend(files)
+    
     ttf_names.sort()
     font_num = len(ttf_names)
     charset_lenw = len(str(len(charset)))
+    
     process_nums = mp.cpu_count() - 2
-    font_num_per_process = font_num // process_nums + 1
+    if process_nums < 1: # Ensure at least one process
+        process_nums = 1 
+    
+    font_num_per_process = font_num // process_nums + (1 if font_num % process_nums != 0 else 0)
 
-    def process(process_id, font_num_p_process):
-        for i in range(process_id * font_num_p_process, (process_id + 1) * font_num_p_process):
-            if i >= font_num:
-                break
-
-            fontname = ttf_names[i].split('.')[0]
-            print(fontname)
-
-            if not os.path.exists(os.path.join(sfd_path, opts.split, fontname)):
-                continue
-
-            ttf_file_path = os.path.join(fonts_file_path, opts.split, ttf_names[i])
-
-            try:
-                font = ImageFont.truetype(ttf_file_path, opts.img_size, encoding="unic")
-            except:
-                print('cant open ' + fontname)
-                continue
-                             
-            fontimgs_array = np.zeros((len(charset), opts.img_size, opts.img_size), np.uint8)
-            fontimgs_array[:, :, :] = 255
-
-            flag_success = True
-            
-            for charid in range(len(charset)):
-                # read the meta file
-                txt_fpath = os.path.join(sfd_path, opts.split, fontname, fontname + '_' + '{num:0{width}}'.format(num=charid, width=charset_lenw) + '.txt')
-                try:
-                    txt_lines = open(txt_fpath,'r').read().split('\n')
-                except:
-                    print('cannot read text file')
-                    flag_success = False
-                    break
-                if len(txt_lines) < 5: 
-                    flag_success = False
-                    break # should be empty file
-                # the offsets are calculated according to the rules in data_utils/svg_utils.py
-                vbox_w = float(txt_lines[1])
-                vbox_h = float(txt_lines[2])
-                norm = max(int(vbox_w), int(vbox_h))
-
-                if int(vbox_h) > int(vbox_w):
-                    add_to_y = 0
-                    add_to_x = abs(int(vbox_h) - int(vbox_w)) / 2
-                    add_to_x = add_to_x * (float(opts.img_size) / norm)
-                else:
-                    add_to_y = abs(int(vbox_h) - int(vbox_w)) / 2
-                    add_to_y = add_to_y * (float(opts.img_size) / norm)
-                    add_to_x = 0
-
-                char = charset[charid]
-                array = np.ndarray((opts.img_size, opts.img_size), np.uint8)
-                array[:, :] = 255
-                image = Image.fromarray(array)
-                draw = ImageDraw.Draw(image)
-                try:
-                    font_width, font_height = font.getsize(char)
-                except:
-                    print('cant calculate height and width ' + "%04d"%i + '_' + '{num:0{width}}'.format(num=charid, width=charset_lenw))
-                    flag_success = False
-                    break
-                
-                try:
-                    ascent, descent = font.getmetrics()
-                except:
-                    print('cannot get ascent, descent')
-                    flag_success = False
-                    break
-                
-                draw_pos_x = add_to_x
-                #if opts.language == 'eng':
-                draw_pos_y = add_to_y + opts.img_size - ascent - int((opts.img_size / 24.0) * (4.0 / 3.0))
-                #else:
-                #    draw_pos_y = add_to_y + opts.img_size - ascent - int((opts.img_size / 24.0) * (10.0 / 3.0))
-                
-                draw.text((draw_pos_x, draw_pos_y), char, (0), font=font)
-                
-                if opts.debug:
-                    image.save(os.path.join(sfd_path, opts.split, fontname, str(charid) + '_' + str(opts.img_size) + '.png'))
-
-                try:
-                    char_w, char_h = get_bbox(image)
-                # print(charid, char_w, char_h)
-                except:
-                    flag_success = False
-                    break
-                
-                if (char_w < opts.img_size * 0.15) and (char_h < opts.img_size * 0.15):
-                    flag_success = False
-                    break
-                
-                fontimgs_array[charid] = np.array(image)
-
-            if flag_success:
-                np.save(os.path.join(sfd_path, opts.split, fontname, 'imgs_' + str(opts.img_size) + '.npy'), fontimgs_array)
-
-    processes = [mp.Process(target=process, args=(pid, font_num_per_process)) for pid in range(process_nums)]
+    processes = []
+    for pid in range(process_nums):
+        # Pass all necessary variables as arguments to the global worker function
+        p = mp.Process(target=_process_single_font, 
+                       args=(pid, font_num_per_process, opts, charset, ttf_names, sfd_path, fonts_file_path, charset_lenw, font_num))
+        processes.append(p)
 
     for p in processes:
         p.start()
     for p in processes:
         p.join()
 
+# --- ARGUMENT PARSING AND MAIN EXECUTION ---
 def main():
     parser = argparse.ArgumentParser(description="Write glyph images")
     parser.add_argument("--language", type=str, default='eng', choices=['eng', 'chn', 'vie'])
@@ -140,10 +178,10 @@ def main():
     parser.add_argument('--sfd_path', type=str, default='../data/font_sfds')
     parser.add_argument('--img_size', type=int, default=64)
     parser.add_argument('--split', type=str, default='train')
-    parser.add_argument('--debug', type=bool, default=False)
+    # Changed to action='store_true' for boolean flags
+    parser.add_argument('--debug', action='store_true', help='Enable debug mode to save individual character images.')
     opts = parser.parse_args()
     write_glyph_imgs_mp(opts)
-
 
 if __name__ == "__main__":
     main()

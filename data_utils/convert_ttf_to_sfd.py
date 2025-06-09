@@ -94,6 +94,20 @@ def process_single_font(task_args):
             char_file = os.path.join(target_dir, f'{font_id}_{char_id:0{charset_lenw}}.txt')
             with open(char_file, 'w', encoding='utf-8') as char_description:
                 char_description.write(f"{char}\n")
+
+                glyph = new_font_for_char[char]
+
+                if glyph is not None and (glyph.width > 0 or glyph.vwidth > 0): 
+                    char_description.write(f"{glyph.width}\n")
+                    char_description.write(f"{glyph.vwidth}\n")
+                else:
+                    # Nếu glyph không tồn tại hoặc có width/height là 0 (glyph rỗng/thiếu)
+                    safe_print(f"⚠️ Glyph rỗng/thiếu thông tin cho ký tự '{char}' (Unicode: {ord(char)}) trong font '{font_name}'.")
+                    char_description.write("0\n0\n")
+
+                char_description.write(f"{char_id:0{charset_lenw}}\n")
+                char_description.write(f"{font_id}")
+
                 if char in new_font_for_char:
                     char_description.write(f"{new_font_for_char[char].width}\n")
                     char_description.write(f"{new_font_for_char[char].vwidth}\n")
@@ -214,7 +228,7 @@ def main():
     parser = argparse.ArgumentParser(description="Chuyển đổi các font TTF/OTF sang định dạng SFD.")
     parser.add_argument("--language", type=str, default='eng', choices=['eng', 'chn', 'vie'],
                         help="Ngôn ngữ của bộ ký tự. ('eng', 'chn', 'vie')")
-    parser.add_argument("--charset_path", type=str, default='/kaggle/input/font-eng-mini/deepvecfont-v2-minidataset-eng/char_set',
+    parser.add_argument("--charset_path", type=str, default='../data/char_set',
                         help="Đường dẫn đến thư mục chứa các tệp bộ ký tự (ví dụ: eng.txt).")
     parser.add_argument("--ttf_path", type=str, default='../data/font_ttfs',
                         help="Đường dẫn đến thư mục gốc chứa các tệp font TTF/OTF.")
