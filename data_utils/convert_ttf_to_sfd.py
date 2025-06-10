@@ -84,7 +84,7 @@ def process_single_font(task_args):
             cur_font.selection.select((ord(char)))
             cur_font.copy()
 
-            new_font_for_char.selection.select((ord(char)))
+            new_font_for_char.selection.select('A') # FIXME
             new_font_for_char.paste()
 
             new_font_for_char.fontname = f"{font_id}_{font_name.replace('.', '_')}_{char_id}"
