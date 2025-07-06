@@ -18,7 +18,8 @@ def test_main_model(opts):
     test_loader = get_loader(opts.data_root, opts.img_size, opts.language, opts.char_num, opts.max_seq_len, opts.dim_seq, opts.batch_size, 'test')
 
     model_main = ModelMain(opts)
-    path_ckpt = os.path.join('experiments', opts.name_exp, 'checkpoints', opts.name_ckpt)
+    # path_ckpt = os.path.join('experiments', opts.name_exp, 'checkpoints', opts.name_ckpt)
+    path_ckpt = opts.name_ckpt
     model_main.load_state_dict(torch.load(path_ckpt)['model'])
     model_main.cuda()
     model_main.eval()
