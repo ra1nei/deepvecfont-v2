@@ -20,6 +20,10 @@ def test_main_model(opts):
     model_main = ModelMain(opts)
     # path_ckpt = os.path.join('experiments', opts.name_exp, 'checkpoints', opts.name_ckpt)
     path_ckpt = opts.name_ckpt
+
+    ckpt_filename = os.path.basename(opts.name_ckpt)
+    ckpt_name_without_ext = os.path.splitext(ckpt_filename)[0]
+    
     model_main.load_state_dict(torch.load(path_ckpt)['model'])
     model_main.cuda()
     model_main.eval()
@@ -43,8 +47,9 @@ def test_main_model(opts):
             idx_best_sample = np.zeros(opts.char_num)
 
             # syn_svg_merge_f = open(os.path.join(svg_merge_dir, f"{opts.name_ckpt}_syn_merge_{test_idx}_rand_{sample_idx}.html"), 'w') 
-            syn_svg_merge_f = open(os.path.join(svg_merge_dir, f"{opts.name_ckpt}_syn_merge_{test_idx}.html"), 'w') 
-    
+            # syn_svg_merge_f = open(os.path.join(svg_merge_dir, f"{opts.name_ckpt}_syn_merge_{test_idx}.html"), 'w') 
+            syn_svg_merge_f = open(os.path.join(svg_merge_dir, f"{ckpt_name_without_ext}_syn_merge_{test_idx}.html"), 'w')
+
             for sample_idx in range(opts.n_samples):
                 ret_dict_test, loss_dict_test = model_main(test_data, mode='test')
 
