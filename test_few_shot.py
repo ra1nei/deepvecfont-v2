@@ -142,4 +142,6 @@ def main():
     test_main_model(opts)
 
 if __name__ == "__main__":
+    print("Running")
     main()
+    print("Finished")
