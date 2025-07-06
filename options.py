@@ -40,6 +40,8 @@ def get_parser_main_model():
     parser.add_argument('--eps', type=float, default=1e-8, help='Adam epsilon')
     parser.add_argument('--weight_decay', type=float, default=0.0, help='weight decay')
     parser.add_argument('--tboard', type=bool, default=True, help='whether use tensorboard to visulize loss')
+    parser.add_argument("--exp_base_dir", type=str, default="./experiments",
+                        help="Base directory where experiment folders will be created. E.g., './experiments' or '../my_exp_dir'")
 
     # loss weight
     parser.add_argument('--kl_beta', type=float, default=0.01, help='latent code kl loss beta')

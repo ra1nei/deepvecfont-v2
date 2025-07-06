@@ -12,7 +12,8 @@ from models.util_funcs import svg2img, cal_iou
 
 def test_main_model(opts):
 
-    dir_res = os.path.join("./experiments/", opts.name_exp, "results")
+    dir_res = os.path.join(opts.exp_base_dir, opts.name_exp, "results") 
+    os.makedirs(dir_res, exist_ok=True)
 
     test_loader = get_loader(opts.data_root, opts.img_size, opts.language, opts.char_num, opts.max_seq_len, opts.dim_seq, opts.batch_size, 'test')
 
@@ -136,7 +137,8 @@ def main():
     
     opts = get_parser_main_model().parse_args()
     opts.name_exp = opts.name_exp + '_' + opts.model_name
-    experiment_dir = os.path.join("./experiments", opts.name_exp)
+    experiment_dir = os.path.join(opts.exp_base_dir, opts.name_exp) # <-- SỬA TẠI ĐÂY
+
     print(f"Testing on experiment {opts.name_exp}...")
     # Dump options
     test_main_model(opts)
