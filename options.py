@@ -18,6 +18,9 @@ def get_parser_main_model():
     parser.add_argument('--dim_seq_latent', type=int, default=512, help='sequence encoder latent dim')
     parser.add_argument('--ngf', type=int, default=16, help='the basic num of channel in image encoder and decoder')
     parser.add_argument('--n_aux_pts', type=int, default=6, help='the number of aux pts in bezier curves for additional supervison')
+    parser.add_argument("--resume_ckpt", type=str, default=None,
+                        help="Path to a checkpoint file to resume training from. (e.g., './experiments/my_exp/checkpoints/100_12345.ckpt')")
+
     # experiment related
     parser.add_argument('--random_index', type=str, default='00')
     parser.add_argument('--name_ckpt', type=str, default='600_192921.ckpt')
