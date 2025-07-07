@@ -48,7 +48,6 @@ def train_main_model(opts):
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.997)
     
     # --- CHECKPOINT BLOCK ---
-    start_epoch = opts.init_epoch # Default start epoch
     start_batch = 0 # Default start batch
     if opts.resume_ckpt is not None:
         print(f"Loading checkpoint from {opts.resume_ckpt} to resume training...")
@@ -59,12 +58,17 @@ def train_main_model(opts):
             else:
                 model_main.load_state_dict(checkpoint['model'])
             optimizer.load_state_dict(checkpoint['opt'])
+
+            opts.init_epoch = checkpoint['n_epoch'] + 1 
+
             start_epoch = checkpoint['n_epoch'] + 1 # Start from the next epoch
             start_batch = checkpoint['n_iter'] # Can be used if you want to resume mid-epoch, but often easier to just start a new epoch
             # If your scheduler state is also saved, load it here.
             # E.g., if you saved 'scheduler': scheduler.state_dict()
             # scheduler.load_state_dict(checkpoint['scheduler'])
-            print(f"Resuming training from Epoch {start_epoch}, Batch {start_batch}")
+            print(f"Resuming training from Epoch {opts.init_epoch}, Batch {checkpoint['n_iter']}")
+            start_batch = checkpoint['n_iter']
+
         except FileNotFoundError:
             print(f"Checkpoint file not found: {opts.resume_ckpt}. Starting training from scratch.")
         except KeyError as e:
