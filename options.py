@@ -21,6 +21,12 @@ def get_parser_main_model():
     parser.add_argument("--resume_ckpt", type=str, default=None,
                         help="Path to a checkpoint file to resume training from. (e.g., './experiments/my_exp/checkpoints/100_12345.ckpt')")
 
+    # New arguments for limiting dataset size
+    parser.add_argument('--num_train_samples', type=int, default=-1,
+                        help='Number of training samples to use. Set to -1 to use all available samples.')
+    parser.add_argument('--num_test_samples', type=int, default=-1,
+                        help='Number of testing/validation samples to use. Set to -1 to use all available samples.')
+
     # experiment related
     parser.add_argument('--random_index', type=str, default='00')
     parser.add_argument('--name_ckpt', type=str, default='600_192921.ckpt')

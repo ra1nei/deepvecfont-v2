@@ -10,7 +10,7 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 
 
 class SVGDataset(data.Dataset):
-    def __init__(self, root_path, img_size=128, lang='eng', char_num=52, max_seq_len=51, dim_seq=10,  transform=None, mode='train'):
+    def __init__(self, root_path, img_size=128, lang='eng', char_num=52, max_seq_len=51, dim_seq=10, transform=None, mode='train', num_samples=-1):
         super().__init__()
         self.mode = mode
         self.img_size = img_size
@@ -26,6 +26,12 @@ class SVGDataset(data.Dataset):
                 for dir_name in dirs:
                     self.font_paths.append(os.path.join(self.dir_path, dir_name))
         self.font_paths.sort()
+
+        # Limit the number of samples if num_samples is specified and valid
+        if num_samples > 0 and num_samples < len(self.font_paths):
+            self.font_paths = self.font_paths[:num_samples]
+            print(f"Limited {mode} dataset to {num_samples} samples.")
+
         print(f"Finished loading {mode} paths, number: {str(len(self.font_paths))}")
         
     def __getitem__(self, index):
@@ -45,10 +51,10 @@ class SVGDataset(data.Dataset):
         return len(self.font_paths)
 
 
-def get_loader(root_path, img_size, lang, char_num, max_seq_len, dim_seq, batch_size, mode='train'):
+def get_loader(root_path, img_size, lang, char_num, max_seq_len, dim_seq, batch_size, mode='train', num_samples=-1):
     SetRange = T.Lambda(lambda X: 1. - X )  # convert [0, 1] -> [0, 1]
     transform = T.Compose([SetRange])
-    dataset = SVGDataset(root_path, img_size, lang, char_num, max_seq_len, dim_seq, transform, mode)
+    dataset = SVGDataset(root_path, img_size, lang, char_num, max_seq_len, dim_seq, transform, mode, num_samples)
     dataloader = data.DataLoader(dataset, batch_size, shuffle=(mode == 'train'), num_workers=batch_size)
     return dataloader
 
@@ -58,10 +64,10 @@ if __name__ == '__main__':
     dim_seq = 10
     batch_size = 1
     char_num = 52
+    num_sample = -1 # Use all
 
-    loader = get_loader(root_path, char_num, max_seq_len, dim_seq, batch_size, 'train')
+    loader = get_loader(root_path, char_num, max_seq_len, dim_seq, batch_size, 'train', num_sample)
     fout = open('train_id_record_old.txt','w')
     for idx, batch in enumerate(loader):
         binary_fp = batch['font_id'].numpy()[0][0]
         fout.write("%05d"%int(binary_fp) + '\n')
-

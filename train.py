@@ -30,8 +30,8 @@ def train_main_model(opts):
     logfile_train = open(os.path.join(dir_log, "train_loss_log.txt"), 'w')
     logfile_val = open(os.path.join(dir_log, "val_loss_log.txt"), 'w')
 
-    train_loader = get_loader(opts.data_root, opts.img_size, opts.language, opts.char_num, opts.max_seq_len, opts.dim_seq, opts.batch_size, opts.mode)
-    val_loader = get_loader(opts.data_root, opts.img_size, opts.language, opts.char_num, opts.max_seq_len, opts.dim_seq, opts.batch_size_val, 'test')
+    train_loader = get_loader(opts.data_root, opts.img_size, opts.language, opts.char_num, opts.max_seq_len, opts.dim_seq, opts.batch_size, opts.mode, num_samples=opts.num_train_samples)
+    val_loader = get_loader(opts.data_root, opts.img_size, opts.language, opts.char_num, opts.max_seq_len, opts.dim_seq, opts.batch_size_val, 'test', num_samples=opts.num_test_samples)
 
     model_main = ModelMain(opts)
 
@@ -126,7 +126,7 @@ def train_main_model(opts):
                 
                 img_sample = torch.cat((ret_dict['img']['trg'].data, ret_dict['img']['out'].data), -2)
                 save_file = os.path.join(dir_sample, f"train_epoch_{epoch}_batch_{batches_done}.png")
-                save_image(img_sample, save_file, nrow=8, normalize=True)    
+                save_image(img_sample, save_file, nrow=8, normalize=True)
                 
             if opts.freq_val > 0 and batches_done % opts.freq_val == 0:
 
