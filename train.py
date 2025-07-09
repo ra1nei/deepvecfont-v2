@@ -80,97 +80,169 @@ def train_main_model(opts):
         writer = SummaryWriter(dir_log)
 
     for epoch in range(opts.init_epoch, opts.n_epochs):
+        # Accumulators for epoch-wise logging
+        total_train_loss = 0.0
+        total_img_l1_loss = 0.0
+        total_img_pt_c_loss = 0.0
+        total_svg_total_loss = 0.0
+        total_svg_cmd_loss = 0.0
+        total_svg_args_loss = 0.0
+        total_svg_smooth_loss = 0.0
+        total_svg_aux_loss = 0.0
+        total_kl_loss = 0.0
+        
+        # Variables to store the last sample for saving image
+        last_ret_dict = None
+
         for idx, data in enumerate(train_loader):
             for key in data: data[key] = data[key].cuda()
             ret_dict, loss_dict = model_main(data)
 
             loss = opts.loss_w_l1 * loss_dict['img']['l1'] + opts.loss_w_pt_c * loss_dict['img']['vggpt'] + opts.kl_beta * loss_dict['kl'] \
-                    + loss_dict['svg']['total'] + loss_dict['svg_para']['total']
+                     + loss_dict['svg']['total'] + loss_dict['svg_para']['total']
 
             # perform optimization
             optimizer.zero_grad()
-            loss.backward()       
+            loss.backward()      
             optimizer.step()
-            batches_done = epoch * len(train_loader) + idx + 1 
-            message = (
-                f"Epoch: {epoch}/{opts.n_epochs}, Batch: {idx}/{len(train_loader)}, "
-                f"Loss: {loss.item():.6f}, "
-                f"img_l1_loss: {opts.loss_w_l1 * loss_dict['img']['l1'].item():.6f}, "
-                f"img_pt_c_loss: {opts.loss_w_pt_c * loss_dict['img']['vggpt']:.6f}, "
-                f"svg_total_loss: {loss_dict['svg']['total'].item():.6f}, "
-                f"svg_cmd_loss: {opts.loss_w_cmd * loss_dict['svg']['cmd'].item():.6f}, "
-                f"svg_args_loss: {opts.loss_w_args * loss_dict['svg']['args'].item():.6f}, "
-                f"svg_smooth_loss: {opts.loss_w_smt * loss_dict['svg']['smt'].item():.6f}, "
-                f"svg_aux_loss: {opts.loss_w_aux * loss_dict['svg']['aux'].item():.6f}, "
-                f"lr: {optimizer.param_groups[0]['lr']:.6f}, "
-                f"Step: {batches_done}"
-            )
-            if batches_done % opts.freq_log == 0:
-                logfile_train.write(message + '\n')
-                print(message)
-                if opts.tboard:
-                    writer.add_scalar('Loss/loss', loss.item(), batches_done)
-                    loss_img_items = ['l1', 'vggpt']
-                    loss_svg_items = ['total', 'cmd', 'args', 'aux', 'smt']
-                    for item in loss_img_items:
-                        writer.add_scalar(f'Loss/img_{item}', loss_dict['img'][item].item(), batches_done)
-                    for item in loss_svg_items:
-                        writer.add_scalar(f'Loss/svg_{item}', loss_dict['svg'][item].item(), batches_done)
-                    for item in loss_svg_items:
-                        writer.add_scalar(f'Loss/svg_para_{item}', loss_dict['svg_para'][item].item(), batches_done)
-                    writer.add_scalar('Loss/img_kl_loss', opts.kl_beta * loss_dict['kl'].item(), batches_done)
-                    writer.add_image('Images/trg_img', ret_dict['img']['trg'][0], batches_done)
-                    writer.add_image('Images/img_output', ret_dict['img']['out'][0], batches_done)
+            
+            # Accumulate losses for epoch-wise average
+            total_train_loss += loss.item()
+            total_img_l1_loss += opts.loss_w_l1 * loss_dict['img']['l1'].item()
+            total_img_pt_c_loss += opts.loss_w_pt_c * loss_dict['img']['vggpt']
+            total_svg_total_loss += loss_dict['svg']['total'].item() + loss_dict['svg_para']['total'].item() # Sum of both parallel and non-parallel SVG total loss
+            total_svg_cmd_loss += opts.loss_w_cmd * (loss_dict['svg']['cmd'].item() + loss_dict['svg_para']['cmd'].item())
+            total_svg_args_loss += opts.loss_w_args * (loss_dict['svg']['args'].item() + loss_dict['svg_para']['args'].item())
+            total_svg_smooth_loss += opts.loss_w_smt * (loss_dict['svg']['smt'].item() + loss_dict['svg_para']['smt'].item())
+            total_svg_aux_loss += opts.loss_w_aux * (loss_dict['svg']['aux'].item() + loss_dict['svg_para']['aux'].item())
+            total_kl_loss += opts.kl_beta * loss_dict['kl'].item()
 
-            if opts.freq_sample > 0 and batches_done % opts.freq_sample == 0:
-                
-                img_sample = torch.cat((ret_dict['img']['trg'].data, ret_dict['img']['out'].data), -2)
-                save_file = os.path.join(dir_sample, f"train_epoch_{epoch}_batch_{batches_done}.png")
-                save_image(img_sample, save_file, nrow=8, normalize=True)
-                
-            if opts.freq_val > 0 and batches_done % opts.freq_val == 0:
+            # Store the last ret_dict for image sampling at the end of the epoch
+            if idx == len(train_loader) - 1: # Only store the last one
+                last_ret_dict = ret_dict
 
-                with torch.no_grad():
-                    model_main.eval()
-                    loss_val = {'img':{'l1':0.0, 'vggpt':0.0}, 'svg':{'total':0.0, 'cmd':0.0, 'args':0.0, 'aux':0.0},
-                                'svg_para':{'total':0.0, 'cmd':0.0, 'args':0.0, 'aux':0.0}}
-                    
-                    for val_idx, val_data in enumerate(val_loader):
-                        for key in val_data: val_data[key] = val_data[key].cuda()
-                        ret_dict_val, loss_dict_val = model_main(val_data, mode='val')
-                        for loss_cat in ['img', 'svg']:
-                            for key, _ in loss_val[loss_cat].items():
-                                loss_val[loss_cat][key] += loss_dict_val[loss_cat][key]
+        # --- Actions performed once per epoch ---
+        batches_done_at_epoch_end = (epoch + 1) * len(train_loader) # This will be the 'n_iter' for checkpoint
 
-                    for loss_cat in ['img', 'svg']:
-                        for key, _ in loss_val[loss_cat].items():
-                            loss_val[loss_cat][key] /= len(val_loader) 
+        # Calculate average losses for the epoch
+        avg_train_loss = total_train_loss / len(train_loader)
+        avg_img_l1_loss = total_img_l1_loss / len(train_loader)
+        avg_img_pt_c_loss = total_img_pt_c_loss / len(train_loader)
+        avg_svg_total_loss = total_svg_total_loss / len(train_loader)
+        avg_svg_cmd_loss = total_svg_cmd_loss / len(train_loader)
+        avg_svg_args_loss = total_svg_args_loss / len(train_loader)
+        avg_svg_smooth_loss = total_svg_smooth_loss / len(train_loader)
+        avg_svg_aux_loss = total_svg_aux_loss / len(train_loader)
+        avg_kl_loss = total_kl_loss / len(train_loader)
 
-                    if opts.tboard:
-                        for loss_cat in ['img', 'svg']:
-                            for key, _ in loss_val[loss_cat].items():
-                                writer.add_scalar(f'VAL/loss_{loss_cat}_{key}', loss_val[loss_cat][key], batches_done)
-                        
-                    val_msg = (
-                        f"Epoch: {epoch}/{opts.n_epochs}, Batch: {idx}/{len(train_loader)}, "
-                        f"Val loss img l1: {loss_val['img']['l1']: .6f}, "
-                        f"Val loss img pt: {loss_val['img']['vggpt']: .6f}, "
-                        f"Val loss total: {loss_val['svg']['total']: .6f}, "
-                        f"Val loss cmd: {loss_val['svg']['cmd']: .6f}, "
-                        f"Val loss args: {loss_val['svg']['args']: .6f}, "
-                    )
-
-                    logfile_val.write(val_msg + "\n")
-                    print(val_msg)
+        # Log training loss per epoch
+        message = (
+            f"Epoch: {epoch}/{opts.n_epochs}, Avg_Loss: {avg_train_loss:.6f}, "
+            f"Avg_img_l1: {avg_img_l1_loss:.6f}, Avg_img_pt_c: {avg_img_pt_c_loss:.6f}, "
+            f"Avg_svg_total: {avg_svg_total_loss:.6f}, Avg_svg_cmd: {avg_svg_cmd_loss:.6f}, "
+            f"Avg_svg_args: {avg_svg_args_loss:.6f}, Avg_svg_smooth: {avg_svg_smooth_loss:.6f}, "
+            f"Avg_svg_aux: {avg_svg_aux_loss:.6f}, Avg_kl: {avg_kl_loss:.6f}, "
+            f"lr: {optimizer.param_groups[0]['lr']:.6f}"
+        )
+        logfile_train.write(message + '\n')
+        print(message)
         
+        if opts.tboard:
+            writer.add_scalar('Loss/avg_loss_epoch', avg_train_loss, epoch)
+            writer.add_scalar('Loss/avg_img_l1_epoch', avg_img_l1_loss, epoch)
+            writer.add_scalar('Loss/avg_img_pt_c_epoch', avg_img_pt_c_loss, epoch)
+            writer.add_scalar('Loss/avg_svg_total_epoch', avg_svg_total_loss, epoch)
+            writer.add_scalar('Loss/avg_svg_cmd_epoch', avg_svg_cmd_loss, epoch)
+            writer.add_scalar('Loss/avg_svg_args_epoch', avg_svg_args_loss, epoch)
+            writer.add_scalar('Loss/avg_svg_smooth_epoch', avg_svg_smooth_loss, epoch)
+            writer.add_scalar('Loss/avg_svg_aux_epoch', avg_svg_aux_loss, epoch)
+            writer.add_scalar('Loss/avg_kl_epoch', avg_kl_loss, epoch)
+            # Use the last sample for image logging
+            if last_ret_dict:
+                writer.add_image('Images/trg_img_epoch', last_ret_dict['img']['trg'][0], epoch)
+                writer.add_image('Images/img_output_epoch', last_ret_dict['img']['out'][0], epoch)
 
-        scheduler.step()
 
-        if epoch % opts.freq_ckpt == 0:
-            if opts.multi_gpu:
-                torch.save({'model':model_main.module.state_dict(), 'opt':optimizer.state_dict(), 'n_epoch':epoch, 'n_iter':batches_done}, f'{dir_ckpt}/{epoch}_{batches_done}.ckpt')
+        # Sample and save images per epoch
+        if opts.freq_sample > 0 and (epoch + 1) % opts.freq_sample == 0: # Check if it's time to sample based on epoch
+            if last_ret_dict: # Ensure we have a sample from the last batch
+                img_sample = torch.cat((last_ret_dict['img']['trg'].data, last_ret_dict['img']['out'].data), -2)
+                save_file = os.path.join(dir_sample, f"train_epoch_{epoch}.png") # Name by epoch
+                save_image(img_sample, save_file, nrow=8, normalize=True)
+                print(f"Saved sample image for epoch {epoch} to {save_file}")
             else:
-                torch.save({'model':model_main.state_dict(), 'opt':optimizer.state_dict(), 'n_epoch':epoch, 'n_iter':batches_done}, f'{dir_ckpt}/{epoch}_{batches_done}.ckpt')
+                print(f"Warning: No sample image to save for epoch {epoch}. last_ret_dict was None.")
+
+        # Validate and log validation loss per epoch
+        if opts.freq_val > 0 and (epoch + 1) % opts.freq_val == 0: # Check if it's time to validate based on epoch
+            with torch.no_grad():
+                model_main.eval() # Set model to evaluation mode
+                val_loss = {'img':{'l1':0.0, 'vggpt':0.0}, 'svg':{'total':0.0, 'cmd':0.0, 'args':0.0, 'aux':0.0, 'smt':0.0}, # Added smt here
+                            'svg_para':{'total':0.0, 'cmd':0.0, 'args':0.0, 'aux':0.0, 'smt':0.0}} # Added smt here
+                
+                # Accumulate validation losses
+                for val_idx, val_data in enumerate(val_loader):
+                    for key in val_data: val_data[key] = val_data[key].cuda()
+                    ret_dict_val, loss_dict_val = model_main(val_data, mode='val')
+                    
+                    # Accumulate for SVG losses (both parallel and non-parallel)
+                    val_loss['svg']['total'] += loss_dict_val['svg']['total'].item()
+                    val_loss['svg']['cmd'] += loss_dict_val['svg']['cmd'].item()
+                    val_loss['svg']['args'] += loss_dict_val['svg']['args'].item()
+                    val_loss['svg']['aux'] += loss_dict_val['svg']['aux'].item()
+                    val_loss['svg']['smt'] += loss_dict_val['svg']['smt'].item()
+
+                    val_loss['svg_para']['total'] += loss_dict_val['svg_para']['total'].item()
+                    val_loss['svg_para']['cmd'] += loss_dict_val['svg_para']['cmd'].item()
+                    val_loss['svg_para']['args'] += loss_dict_val['svg_para']['args'].item()
+                    val_loss['svg_para']['aux'] += loss_dict_val['svg_para']['aux'].item()
+                    val_loss['svg_para']['smt'] += loss_dict_val['svg_para']['smt'].item()
+
+                    # Accumulate for image losses
+                    val_loss['img']['l1'] += loss_dict_val['img']['l1'].item()
+                    val_loss['img']['vggpt'] += loss_dict_val['img']['vggpt'].item()
+
+                # Calculate average validation losses
+                num_val_batches = len(val_loader)
+                if num_val_batches > 0: # Avoid division by zero if val_loader is empty
+                    for loss_cat in ['img', 'svg', 'svg_para']:
+                        for key in val_loss[loss_cat]: # Iterate over keys directly
+                            val_loss[loss_cat][key] /= num_val_batches 
+
+                if opts.tboard:
+                    writer.add_scalar(f'VAL/loss_img_l1_epoch', val_loss['img']['l1'], epoch)
+                    writer.add_scalar(f'VAL/loss_img_vggpt_epoch', val_loss['img']['vggpt'], epoch)
+                    writer.add_scalar(f'VAL/loss_svg_total_epoch', val_loss['svg']['total'] + val_loss['svg_para']['total'], epoch) # Sum both for overall SVG loss
+                    writer.add_scalar(f'VAL/loss_svg_cmd_epoch', val_loss['svg']['cmd'] + val_loss['svg_para']['cmd'], epoch)
+                    writer.add_scalar(f'VAL/loss_svg_args_epoch', val_loss['svg']['args'] + val_loss['svg_para']['args'], epoch)
+                    writer.add_scalar(f'VAL/loss_svg_aux_epoch', val_loss['svg']['aux'] + val_loss['svg_para']['aux'], epoch)
+                    writer.add_scalar(f'VAL/loss_svg_smt_epoch', val_loss['svg']['smt'] + val_loss['svg_para']['smt'], epoch)
+                    
+                val_msg = (
+                    f"Epoch: {epoch}/{opts.n_epochs}, "
+                    f"Val loss img l1: {val_loss['img']['l1']: .6f}, "
+                    f"Val loss img pt: {val_loss['img']['vggpt']: .6f}, "
+                    f"Val loss total SVG: {(val_loss['svg']['total'] + val_loss['svg_para']['total']): .6f}, " # Sum both
+                    f"Val loss cmd SVG: {(val_loss['svg']['cmd'] + val_loss['svg_para']['cmd']): .6f}, "
+                    f"Val loss args SVG: {(val_loss['svg']['args'] + val_loss['svg_para']['args']): .6f}, "
+                    f"Val loss smooth SVG: {(val_loss['svg']['smt'] + val_loss['svg_para']['smt']): .6f}, "
+                    f"Val loss aux SVG: {(val_loss['svg']['aux'] + val_loss['svg_para']['aux']): .6f}"
+                )
+
+                logfile_val.write(val_msg + "\n")
+                print(val_msg)
+            model_main.train() # Set model back to train mode after validation
+
+        scheduler.step() # Learning rate scheduler step (usually per epoch)
+
+        # Save checkpoint per epoch (this logic remains mostly the same, but n_iter will be epoch-end batches_done)
+        if (epoch + 1) % opts.freq_ckpt == 0: # Changed to (epoch + 1) to align with epoch number
+            if opts.multi_gpu:
+                torch.save({'model':model_main.module.state_dict(), 'opt':optimizer.state_dict(), 'n_epoch':epoch, 'n_iter':batches_done_at_epoch_end}, f'{dir_ckpt}/{epoch+1}.ckpt') # Name by epoch
+            else:
+                torch.save({'model':model_main.state_dict(), 'opt':optimizer.state_dict(), 'n_epoch':epoch, 'n_iter':batches_done_at_epoch_end}, f'{dir_ckpt}/{epoch+1}.ckpt') # Name by epoch
+            print(f"Saved checkpoint for epoch {epoch+1} to {dir_ckpt}/{epoch+1}.ckpt")
+
 
     logfile_train.close()
     logfile_val.close()
