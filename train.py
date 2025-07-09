@@ -41,8 +41,8 @@ def train_main_model(opts):
     model_main.cuda()
     
     parameters_all = [{"params": model_main.img_encoder.parameters()}, {"params": model_main.img_decoder.parameters()},
-                        {"params": model_main.modality_fusion.parameters()}, {"params": model_main.transformer_main.parameters()},
-                        {"params": model_main.transformer_seqdec.parameters()}]
+                      {"params": model_main.modality_fusion.parameters()}, {"params": model_main.transformer_main.parameters()},
+                      {"params": model_main.transformer_seqdec.parameters()}]
     
     optimizer = Adam(parameters_all, lr=opts.lr, betas=(opts.beta1, opts.beta2), eps=opts.eps, weight_decay=opts.weight_decay)
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.997)
@@ -80,7 +80,8 @@ def train_main_model(opts):
         writer = SummaryWriter(dir_log)
 
     for epoch in range(opts.init_epoch, opts.n_epochs):
-        # Accumulators for epoch-wise logging
+        print(f"\n--- Bắt đầu huấn luyện Epoch {epoch}/{opts.n_epochs - 1} ---") # -1 because range is exclusive of opts.n_epochs
+        
         total_train_loss = 0.0
         total_img_l1_loss = 0.0
         total_img_pt_c_loss = 0.0
@@ -91,7 +92,6 @@ def train_main_model(opts):
         total_svg_aux_loss = 0.0
         total_kl_loss = 0.0
         
-        # Variables to store the last sample for saving image
         last_ret_dict = None
 
         for idx, data in enumerate(train_loader):
@@ -101,7 +101,7 @@ def train_main_model(opts):
             loss = opts.loss_w_l1 * loss_dict['img']['l1'] + opts.loss_w_pt_c * loss_dict['img']['vggpt'] + opts.kl_beta * loss_dict['kl'] \
                      + loss_dict['svg']['total'] + loss_dict['svg_para']['total']
 
-            # perform optimization
+            # Perform optimization
             optimizer.zero_grad()
             loss.backward()      
             optimizer.step()
@@ -121,7 +121,6 @@ def train_main_model(opts):
             if idx == len(train_loader) - 1: # Only store the last one
                 last_ret_dict = ret_dict
 
-        # --- Actions performed once per epoch ---
         batches_done_at_epoch_end = (epoch + 1) * len(train_loader) # This will be the 'n_iter' for checkpoint
 
         # Calculate average losses for the epoch
@@ -137,7 +136,7 @@ def train_main_model(opts):
 
         # Log training loss per epoch
         message = (
-            f"Epoch: {epoch}/{opts.n_epochs}, Avg_Loss: {avg_train_loss:.6f}, "
+            f"Epoch: {epoch}/{opts.n_epochs - 1}, Avg_Loss: {avg_train_loss:.6f}, " # Adjusted total epochs for 0-indexing
             f"Avg_img_l1: {avg_img_l1_loss:.6f}, Avg_img_pt_c: {avg_img_pt_c_loss:.6f}, "
             f"Avg_svg_total: {avg_svg_total_loss:.6f}, Avg_svg_cmd: {avg_svg_cmd_loss:.6f}, "
             f"Avg_svg_args: {avg_svg_args_loss:.6f}, Avg_svg_smooth: {avg_svg_smooth_loss:.6f}, "
@@ -145,7 +144,7 @@ def train_main_model(opts):
             f"lr: {optimizer.param_groups[0]['lr']:.6f}"
         )
         logfile_train.write(message + '\n')
-        print(message)
+        print(f"Train Log (Epoch {epoch}): {message}") # Print to console with epoch prefix
         
         if opts.tboard:
             writer.add_scalar('Loss/avg_loss_epoch', avg_train_loss, epoch)
@@ -164,8 +163,8 @@ def train_main_model(opts):
 
 
         # Sample and save images per epoch
-        if opts.freq_sample > 0 and (epoch + 1) % opts.freq_sample == 0: # Check if it's time to sample based on epoch
-            if last_ret_dict: # Ensure we have a sample from the last batch
+        if opts.freq_sample > 0 and (epoch + 1) % opts.freq_sample == 0: 
+            if last_ret_dict: 
                 img_sample = torch.cat((last_ret_dict['img']['trg'].data, last_ret_dict['img']['out'].data), -2)
                 save_file = os.path.join(dir_sample, f"train_epoch_{epoch}.png") # Name by epoch
                 save_image(img_sample, save_file, nrow=8, normalize=True)
@@ -174,18 +173,17 @@ def train_main_model(opts):
                 print(f"Warning: No sample image to save for epoch {epoch}. last_ret_dict was None.")
 
         # Validate and log validation loss per epoch
-        if opts.freq_val > 0 and (epoch + 1) % opts.freq_val == 0: # Check if it's time to validate based on epoch
+        if opts.freq_val > 0 and (epoch + 1) % opts.freq_val == 0: 
             with torch.no_grad():
                 model_main.eval() # Set model to evaluation mode
-                val_loss = {'img':{'l1':0.0, 'vggpt':0.0}, 'svg':{'total':0.0, 'cmd':0.0, 'args':0.0, 'aux':0.0, 'smt':0.0}, # Added smt here
-                            'svg_para':{'total':0.0, 'cmd':0.0, 'args':0.0, 'aux':0.0, 'smt':0.0}} # Added smt here
+                val_loss = {'img':{'l1':0.0, 'vggpt':0.0}, 'svg':{'total':0.0, 'cmd':0.0, 'args':0.0, 'aux':0.0, 'smt':0.0}, 
+                            'svg_para':{'total':0.0, 'cmd':0.0, 'args':0.0, 'aux':0.0, 'smt':0.0}} 
                 
                 # Accumulate validation losses
                 for val_idx, val_data in enumerate(val_loader):
                     for key in val_data: val_data[key] = val_data[key].cuda()
                     ret_dict_val, loss_dict_val = model_main(val_data, mode='val')
                     
-                    # Accumulate for SVG losses (both parallel and non-parallel)
                     val_loss['svg']['total'] += loss_dict_val['svg']['total'].item()
                     val_loss['svg']['cmd'] += loss_dict_val['svg']['cmd'].item()
                     val_loss['svg']['args'] += loss_dict_val['svg']['args'].item()
@@ -198,31 +196,30 @@ def train_main_model(opts):
                     val_loss['svg_para']['aux'] += loss_dict_val['svg_para']['aux'].item()
                     val_loss['svg_para']['smt'] += loss_dict_val['svg_para']['smt'].item()
 
-                    # Accumulate for image losses
                     val_loss['img']['l1'] += loss_dict_val['img']['l1'].item()
                     val_loss['img']['vggpt'] += loss_dict_val['img']['vggpt'].item()
 
                 # Calculate average validation losses
                 num_val_batches = len(val_loader)
-                if num_val_batches > 0: # Avoid division by zero if val_loader is empty
+                if num_val_batches > 0: 
                     for loss_cat in ['img', 'svg', 'svg_para']:
-                        for key in val_loss[loss_cat]: # Iterate over keys directly
+                        for key in val_loss[loss_cat]: 
                             val_loss[loss_cat][key] /= num_val_batches 
 
                 if opts.tboard:
                     writer.add_scalar(f'VAL/loss_img_l1_epoch', val_loss['img']['l1'], epoch)
                     writer.add_scalar(f'VAL/loss_img_vggpt_epoch', val_loss['img']['vggpt'], epoch)
-                    writer.add_scalar(f'VAL/loss_svg_total_epoch', val_loss['svg']['total'] + val_loss['svg_para']['total'], epoch) # Sum both for overall SVG loss
+                    writer.add_scalar(f'VAL/loss_svg_total_epoch', val_loss['svg']['total'] + val_loss['svg_para']['total'], epoch) 
                     writer.add_scalar(f'VAL/loss_svg_cmd_epoch', val_loss['svg']['cmd'] + val_loss['svg_para']['cmd'], epoch)
                     writer.add_scalar(f'VAL/loss_svg_args_epoch', val_loss['svg']['args'] + val_loss['svg_para']['args'], epoch)
                     writer.add_scalar(f'VAL/loss_svg_aux_epoch', val_loss['svg']['aux'] + val_loss['svg_para']['aux'], epoch)
                     writer.add_scalar(f'VAL/loss_svg_smt_epoch', val_loss['svg']['smt'] + val_loss['svg_para']['smt'], epoch)
                     
                 val_msg = (
-                    f"Epoch: {epoch}/{opts.n_epochs}, "
+                    f"Epoch: {epoch}/{opts.n_epochs - 1}, " # Adjusted total epochs for 0-indexing
                     f"Val loss img l1: {val_loss['img']['l1']: .6f}, "
                     f"Val loss img pt: {val_loss['img']['vggpt']: .6f}, "
-                    f"Val loss total SVG: {(val_loss['svg']['total'] + val_loss['svg_para']['total']): .6f}, " # Sum both
+                    f"Val loss total SVG: {(val_loss['svg']['total'] + val_loss['svg_para']['total']): .6f}, " 
                     f"Val loss cmd SVG: {(val_loss['svg']['cmd'] + val_loss['svg_para']['cmd']): .6f}, "
                     f"Val loss args SVG: {(val_loss['svg']['args'] + val_loss['svg_para']['args']): .6f}, "
                     f"Val loss smooth SVG: {(val_loss['svg']['smt'] + val_loss['svg_para']['smt']): .6f}, "
@@ -230,17 +227,16 @@ def train_main_model(opts):
                 )
 
                 logfile_val.write(val_msg + "\n")
-                print(val_msg)
+                print(f"Validation Log (Epoch {epoch}): {val_msg}") # Print to console with epoch prefix
             model_main.train() # Set model back to train mode after validation
 
-        scheduler.step() # Learning rate scheduler step (usually per epoch)
+        scheduler.step() 
 
-        # Save checkpoint per epoch (this logic remains mostly the same, but n_iter will be epoch-end batches_done)
-        if (epoch + 1) % opts.freq_ckpt == 0: # Changed to (epoch + 1) to align with epoch number
+        if (epoch + 1) % opts.freq_ckpt == 0: 
             if opts.multi_gpu:
-                torch.save({'model':model_main.module.state_dict(), 'opt':optimizer.state_dict(), 'n_epoch':epoch, 'n_iter':batches_done_at_epoch_end}, f'{dir_ckpt}/{epoch+1}.ckpt') # Name by epoch
+                torch.save({'model':model_main.module.state_dict(), 'opt':optimizer.state_dict(), 'n_epoch':epoch, 'n_iter':batches_done_at_epoch_end}, f'{dir_ckpt}/{epoch+1}.ckpt') 
             else:
-                torch.save({'model':model_main.state_dict(), 'opt':optimizer.state_dict(), 'n_epoch':epoch, 'n_iter':batches_done_at_epoch_end}, f'{dir_ckpt}/{epoch+1}.ckpt') # Name by epoch
+                torch.save({'model':model_main.state_dict(), 'opt':optimizer.state_dict(), 'n_epoch':epoch, 'n_iter':batches_done_at_epoch_end}, f'{dir_ckpt}/{epoch+1}.ckpt') 
             print(f"Saved checkpoint for epoch {epoch+1} to {dir_ckpt}/{epoch+1}.ckpt")
 
 
@@ -260,7 +256,9 @@ def train(opts):
     if opts.model_name == 'main_model':
         train_main_model(opts)
     elif opts.model_name == 'others':
-        train_others(opts)
+        # Assuming train_others function exists for other models
+        # train_others(opts) 
+        raise NotImplementedError("train_others is not implemented in this snippet.")
     else:
         raise NotImplementedError
 
